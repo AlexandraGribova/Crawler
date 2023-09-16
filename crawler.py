@@ -8,10 +8,15 @@ class Crawler:
         db_user = 'postgres'
         db_password = '123456'
         db_port = '5432'
-        self.conn = psycopg2.connect(dbname=db_name, host=db_host, user=db_user, password=db_password, port=db_port)
+        self.conn = psycopg2.connect(host=db_host, user=db_user, password=db_password, port=db_port)
         self.conn.autocommit = True
-        cursor = self.conn.cursor() ## Курсор - объект для осуществления запросов к БД
-        print('Произведено подключение к серверу PostgreSQL ')
+        cursor = self.conn.cursor()
+        print('Произведено подключение к серверу')
+        sql = 'select \'create database %s\' where NOT EXISTS (SELECT FROM pg_database WHERE datname = \'%s\')' % (db_name, db_name)
+        res = cursor.execute(sql) ## Если БД уже существует, то ничего не вернет, иначе вернет 'ctreate db name'
+        if res is not None:
+            cursor.execute(res)
+        print('Создана БД Crawler')
         cursor.close()
         pass
 
@@ -59,27 +64,27 @@ class Crawler:
     # 7. Инициализация таблиц в БД
     def initDB(self):
         cursor = self.conn.cursor()
-        sql = 'create table wordList (rowId integer PRIMARY KEY,\
+        sql = 'create table wordList (rowId serial PRIMARY KEY,\
                                       word text,\
                                       isFiltred integer);'
         cursor.execute(sql)
         print('Создана таблица wordList')
-        sql = 'create table URLList (rowId integer PRIMARY KEY,\
+        sql = 'create table URLList (rowId serial PRIMARY KEY,\
 					                 url text);'
         cursor.execute(sql)
         print('Создана таблица URLList')
-        sql = 'create table wordLocation (rowId integer PRIMARY KEY,\
+        sql = 'create table wordLocation (rowId serial PRIMARY KEY,\
                                           fk_wordId integer REFERENCES wordList(rowId),\
                                           fk_URLId integer REFERENCES URLList(rowId),\
                                           wordLocation integer);'
         cursor.execute(sql)
         print('Создана таблица wordLocation')
-        sql = 'create table linkBetweenURL (rowId integer PRIMARY KEY,\
+        sql = 'create table linkBetweenURL (rowId serial PRIMARY KEY,\
 					                        fk_FromURL_Id integer REFERENCES URLList(rowId),\
 						                    fk_ToURL_Id integer REFERENCES URLList(rowId));'
         cursor.execute(sql)
         print('Создана таблица linkBetweenURL')
-        sql = 'create table linkWord (rowId integer PRIMARY KEY,\
+        sql = 'create table linkWord (rowId serial PRIMARY KEY,\
                                       fk_wordId integer REFERENCES wordList(rowId),\
                                       fk_linkId integer REFERENCES linkBetweenURL(rowId));'
         cursor.execute(sql)
