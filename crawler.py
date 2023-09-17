@@ -22,21 +22,20 @@ class Crawler:
         if len(res) != 0:
             cursor.execute(res)
         print('Создана БД Crawler')
+        ## Удаляем все таблицы\
+        sql = 'drop table linkWord;\
+                       drop table linkBetweenURL;\
+                       drop table wordLocation;\
+                       drop table URLList;\
+                       drop table wordList;'
+        cursor.execute(sql)
+        print('Все таблицы удалены')
         cursor.close()
         pass
 
     # 0. Деструктор
     def __del__(self):
-        ## Удаляем все таблицы, не факт что это нужно
-        cursor = self.conn.cursor()
-        sql = 'drop table linkWord;\
-               drop table linkBetweenURL;\
-               drop table wordLocation;\
-               drop table URLList;\
-               drop table wordList;'
-        cursor.execute(sql)
-        print('Все таблицы удалены')
-        cursor.close()
+
         self.conn.close()
         pass
 
@@ -91,6 +90,8 @@ class Crawler:
                     href_tag = a_tag.get('href')
                     #   убрать пустые ссылки, вырезать якоря из ссылок, и т.д.
                     if href_tag is not None and not '#' in href_tag and href_tag!='/':#!! вот тут непонятные локальые ссылки не удаляю пока что
+                        if not 'http' in href_tag:
+                            href_tag = url[:-1] + href_tag
                         #   добавить ссылку в список следующих на обход
                         urlListNew.append(href_tag)
                         #   извлечь из тэг <a> текст linkText
@@ -102,7 +103,6 @@ class Crawler:
                         cursor.execute("""select rowId from URLList where url=%s""", [href_tag])
                         to_url = cursor.fetchall()[0]
                         cursor.execute("""insert  into linkBetweenURL(fk_FromURL_Id, fk_ToURL_Id) values(%s, %s);""", [from_url, to_url])
-
             # вызвать функцию класса Crawler для добавления содержимого в индекс
             #self.addToIndex(soup, url)
 
