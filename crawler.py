@@ -17,8 +17,9 @@ class Crawler:
         cursor = self.conn.cursor()
         print('Произведено подключение к серверу')
         sql = 'select \'create database %s\' where NOT EXISTS (SELECT FROM pg_database WHERE datname = \'%s\')' % (db_name, db_name)
-        res = cursor.execute(sql) ## Если БД уже существует, то ничего не вернет, иначе вернет 'ctreate db name'
-        if res is not None:
+        cursor.execute(sql) ## Если БД уже существует, то ничего не вернет, иначе вернет 'ctreate db name'
+        res = cursor.fetchall()
+        if len(res) != 0:
             cursor.execute(res)
         print('Создана БД Crawler')
         cursor.close()
@@ -62,10 +63,11 @@ class Crawler:
     # Добавление ссылки в URLList с проверкой на наличие дублей
     def addUrlToURLList(self, url):
         cursor = self.conn.cursor()
-        result = cursor.execute('select rowId from URLList where url=%s', [url])
+        cursor.execute("""select * from URLList where url=%s""", [url])
+        result = cursor.fetchall()
         #   добавить в таблицу URLList если такой записи нет
-        if result is None:
-           cursor.execute('insert  into URLList(url) values(%s);', [url])
+        if len(result) == 0:
+           cursor.execute("""insert  into URLList(url) values(%s);""", [url])
         pass
     # 6. Непосредственно сам метод сбора данных.
     # Начиная с заданного списка страниц, выполняет поиск в ширину
