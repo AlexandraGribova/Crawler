@@ -12,7 +12,7 @@ class Crawler:
         db_password = '123456'
         db_port = '5432'
         self.start_link = 'https://ngs.ru/'
-        self.conn = psycopg2.connect(dbname = db_name, host=db_host, user=db_user, password=db_password, port=db_port)
+        self.conn = psycopg2.connect(dbname=db_name, host=db_host, user=db_user, password=db_password, port=db_port)
         self.conn.autocommit = True
         cursor = self.conn.cursor()
         print('Произведено подключение к серверу')
@@ -34,7 +34,7 @@ class Crawler:
                drop table wordLocation;\
                drop table URLList;\
                drop table wordList;'
-        #cursor.execute(sql)
+        cursor.execute(sql)
         print('Все таблицы удалены')
         cursor.close()
         self.conn.close()
@@ -76,9 +76,7 @@ class Crawler:
         cursor = self.conn.cursor()
         urlListNew = urlList.copy()
         #   добавить в таблицу URLList стартовую ссылку (на нгс)
-        sql = 'insert into URLList(url)\
-                      values(\'%s\');' % (self.start_link)
-        cursor.execute(sql)
+        cursor.execute("""insert into URLList(url) values(%s);""", [self.start_link])
         for currDepth in range(0, maxDepth):
             urlList = urlListNew.copy()
             urlListNew = []
@@ -98,7 +96,12 @@ class Crawler:
                         #   извлечь из тэг <a> текст linkText
                         link_text = a_tag.text.lower()
                         self.addUrlToURLList(href_tag)
-
+                        # добавить данные в linkBetweenURL
+                        cursor.execute("""select rowId from URLList where url=%s""", [url])
+                        from_url = cursor.fetchall()[0]
+                        cursor.execute("""select rowId from URLList where url=%s""", [href_tag])
+                        to_url = cursor.fetchall()[0]
+                        cursor.execute("""insert  into linkBetweenURL(fk_FromURL_Id, fk_ToURL_Id) values(%s, %s);""", [from_url, to_url])
 
             # вызвать функцию класса Crawler для добавления содержимого в индекс
             #self.addToIndex(soup, url)
