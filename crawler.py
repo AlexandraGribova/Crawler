@@ -1,4 +1,7 @@
 import psycopg2
+import bs4
+import re
+import requests
 class Crawler:
 
     # 0. Конструктор Инициализация паука с параметрами БД
@@ -8,7 +11,8 @@ class Crawler:
         db_user = 'postgres'
         db_password = '123456'
         db_port = '5432'
-        self.conn = psycopg2.connect(host=db_host, user=db_user, password=db_password, port=db_port)
+        self.start_link = 'https://ngs.ru/'
+        self.conn = psycopg2.connect(dbname = db_name, host=db_host, user=db_user, password=db_password, port=db_port)
         self.conn.autocommit = True
         cursor = self.conn.cursor()
         print('Произведено подключение к серверу')
@@ -29,7 +33,7 @@ class Crawler:
                drop table wordLocation;\
                drop table URLList;\
                drop table wordList;'
-        cursor.execute(sql)
+        #cursor.execute(sql)
         print('Все таблицы удалены')
         cursor.close()
         self.conn.close()
@@ -55,10 +59,54 @@ class Crawler:
     def addLinkRef(self, urlFrom, urlTo, linkText):
         pass
 
+    # Добавление ссылки в URLList с проверкой на наличие дублей
+    def addUrlToURLList(self, url):
+        cursor = self.conn.cursor()
+        result = cursor.execute('select rowId from URLList where url=%s', [url])
+        #   добавить в таблицу URLList если такой записи нет
+        if result is None:
+           cursor.execute('insert  into URLList(url) values(%s);', [url])
+        pass
     # 6. Непосредственно сам метод сбора данных.
     # Начиная с заданного списка страниц, выполняет поиск в ширину
     # до заданной глубины, индексируя все встречающиеся по пути страницы
     def crawl(self, urlList, maxDepth=1):
+        cursor = self.conn.cursor()
+        urlListNew = urlList.copy()
+        #   добавить в таблицу URLList стартовую ссылку (на нгс)
+        sql = 'insert into URLList(url)\
+                      values(\'%s\');' % (self.start_link)
+        cursor.execute(sql)
+        for currDepth in range(0, maxDepth):
+            urlList = urlListNew.copy()
+            urlListNew = []
+            for url in urlList:
+                # получить HTML-код страницы по текущему url
+                html_doc = requests.get(url).text
+                # использовать парсер для работа тегов
+                soup = bs4.BeautifulSoup(html_doc, "html.parser")
+                # получить список тэгов <a> с текущей страницы
+                for a_tag in soup.findAll('a'):
+                    #   проверить наличие атрибута 'href'
+                    href_tag = a_tag.get('href')
+                    #   убрать пустые ссылки, вырезать якоря из ссылок, и т.д.
+                    if href_tag is not None and not '#' in href_tag and href_tag!='/':#!! вот тут непонятные локальые ссылки не удаляю пока что
+                        #   добавить ссылку в список следующих на обход
+                        urlListNew.append(href_tag)
+                        #   извлечь из тэг <a> текст linkText
+                        link_text = a_tag.text.lower()
+                        self.addUrlToURLList(href_tag)
+
+
+            # вызвать функцию класса Crawler для добавления содержимого в индекс
+            #self.addToIndex(soup, url)
+
+            # конец обработки текущ url
+                    pass
+
+        # конец обработки всех URL на данной глубине
+        pass
+
         pass
 
     # 7. Инициализация таблиц в БД
@@ -67,7 +115,7 @@ class Crawler:
         sql = 'create table wordList (rowId serial PRIMARY KEY,\
                                       word text,\
                                       isFiltred integer);'
-        cursor.execute(sql)
+        res = cursor.execute(sql)
         print('Создана таблица wordList')
         sql = 'create table URLList (rowId serial PRIMARY KEY,\
 					                 url text);'
