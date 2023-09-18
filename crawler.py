@@ -102,7 +102,18 @@ class Crawler:
 
     # 5. Добавление ссылки с одной страницы на другую
     def addLinkRef(self, urlFrom, urlTo, linkText):
-        pass
+        cursor = self.conn.cursor()
+        # добавить данные в linkBetweenURL
+        cursor.execute("""select rowId from URLList where url=%s""", [urlFrom])
+        from_url = cursor.fetchall()[0]
+        cursor.execute("""select rowId from URLList where url=%s""", [urlTo])
+        to_url = cursor.fetchall()[0]
+        cursor.execute("""insert  into linkBetweenURL(fk_FromURL_Id, fk_ToURL_Id) values(%s, %s) returning *;""",
+                       [from_url, to_url])
+        link_word_id = cursor.fetchall()[0][0]
+        # 1) парсим linkText и помещаем его в wordList
+        # 2) заполянем linkWord -> wordList.rowId, link_word_id
+        return from_url
 
     # Добавление ссылки в URLList с проверкой на наличие дублей
     def addUrlToURLList(self, url):
@@ -143,13 +154,7 @@ class Crawler:
                         #   извлечь из тэг <a> текст linkText
                         link_text = a_tag.text.lower()
                         self.addUrlToURLList(href_tag)
-                        # добавить данные в linkBetweenURL
-                        cursor.execute("""select rowId from URLList where url=%s""", [url])
-                        from_url = cursor.fetchall()[0]
-                        cursor.execute("""select rowId from URLList where url=%s""", [href_tag])
-                        to_url = cursor.fetchall()[0]
-                        cursor.execute("""insert  into linkBetweenURL(fk_FromURL_Id, fk_ToURL_Id) values(%s, %s);""",
-                                       [from_url, to_url])
+                        from_url = self.addLinkRef(url, href_tag, link_text)
                 # вызвать функцию класса Crawler для добавления содержимого в индекс
                 self.addIndex(soup, from_url)
                 # конец обработки текущ url
