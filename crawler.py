@@ -26,11 +26,11 @@ class Crawler:
             cursor.execute(res)
         print('Создана БД Crawler')
         ## Удаляем все таблицы\
-        sql = 'drop table linkWord;\
-                       drop table linkBetweenURL;\
-                       drop table wordLocation;\
-                       drop table URLList;\
-                       drop table wordList;'
+        sql = 'drop table if exists linkWord;\
+                       drop table if exists linkBetweenURL;\
+                       drop table if exists wordLocation;\
+                       drop table if exists URLList;\
+                       drop table if exists wordList;'
         cursor.execute(sql)
         print('Все таблицы удалены')
         cursor.close()
@@ -41,14 +41,6 @@ class Crawler:
         self.conn.close()
         pass
 
-    def isIndexed(self, url):
-        cursor = self.conn.cursor()
-        cursor.execute("""select * from wordLocation where fk_URLid = %s""", [url])
-        result = cursor.fetchall()
-        if len(result) == 0:
-            return 0
-        else:
-            return 1
     # 1. Индексирование одной страницы
     # вместо url передаем айдишник данной ссылки в URLList
     def addIndex(self, soup, url):
@@ -67,7 +59,9 @@ class Crawler:
             # Добавляем слово, если не существует
             for word in wordList:
                 rowId = self.getEntryId(word)
-                cursor.execute("""insert into wordLocation(fk_wordid, fk_urlid, wordlocation) values(%s, %s, %s) returning *""", [rowId, url, word_counter])
+                cursor.execute(
+                    """insert into wordLocation(fk_wordid, fk_urlid, wordlocation) values(%s, %s, %s) returning *""",
+                    [rowId, url, word_counter])
                 word_counter += 1
 
     # 2. Получение текста страницы
@@ -98,7 +92,13 @@ class Crawler:
 
     # 4. Проиндексирован ли URL (проверка наличия URL в БД)
     def isIndexed(self, url):
-        return False
+        cursor = self.conn.cursor()
+        cursor.execute("""select * from wordLocation where fk_URLid = %s""", [url])
+        result = cursor.fetchall()
+        if len(result) == 0:
+            return 0
+        else:
+            return 1
 
     # 5. Добавление ссылки с одной страницы на другую
     def addLinkRef(self, urlFrom, urlTo, linkText):
@@ -150,7 +150,7 @@ class Crawler:
                         to_url = cursor.fetchall()[0]
                         cursor.execute("""insert  into linkBetweenURL(fk_FromURL_Id, fk_ToURL_Id) values(%s, %s);""",
                                        [from_url, to_url])
-                 # вызвать функцию класса Crawler для добавления содержимого в индекс
+                # вызвать функцию класса Crawler для добавления содержимого в индекс
                 self.addIndex(soup, from_url)
                 # конец обработки текущ url
                 pass
