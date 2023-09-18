@@ -23,11 +23,11 @@ class Crawler:
             cursor.execute(res)
         print('Создана БД Crawler')
         ## Удаляем все таблицы\
-        sql = 'drop table linkWord;\
-                       drop table linkBetweenURL;\
-                       drop table wordLocation;\
-                       drop table URLList;\
-                       drop table wordList;'
+        sql = 'drop table if exists linkWord;\
+                       drop table if exists linkBetweenURL;\
+                       drop table if exists wordLocation;\
+                       drop table if exists URLList;\
+                       drop table if exists wordList;'
         cursor.execute(sql)
         print('Все таблицы удалены')
         cursor.close()
