@@ -1,6 +1,5 @@
 import psycopg2
 import bs4
-import re
 import requests
 import pymorphy2
 
@@ -39,31 +38,42 @@ class Crawler:
 
     # 0. Деструктор
     def __del__(self):
-
         self.conn.close()
         pass
 
+    def isIndexed(self, url):
+        cursor = self.conn.cursor()
+        cursor.execute("""select * from wordLocation where fk_URLid = %s""", [url])
+        result = cursor.fetchall()
+        if len(result) == 0:
+            return 0
+        else:
+            return 1
     # 1. Индексирование одной страницы
+    # вместо url передаем айдишник данной ссылки в URLList
     def addIndex(self, soup, url):
+        cursor = self.conn.cursor()
+        word_counter = 0
         if self.isIndexed(url):
             # Если страница уже есть в базе обработка происходить не будет
             print('Уже обработана')
             return
         else:
             # Если страницы нет в базе подготавливаем и добавляем
-
             # Получаем текст
             text = self.getTextOnly(soup)
             # Чистим текст
             wordList = self.separateWords(text)
-
             # Добавляем слово, если не существует
             for word in wordList:
-                self.getEntryId(word)
+                rowId = self.getEntryId(word)
+                cursor.execute("""insert into wordLocation(fk_wordid, fk_urlid, wordlocation) values(%s, %s, %s) returning *""", [rowId, url, word_counter])
+                word_counter += 1
 
     # 2. Получение текста страницы
-    def getTextOnly(self, text):
-        return
+    def getTextOnly(self, soup):
+        text = soup.get_text()
+        return text
 
     # 3. Разбиение текста на слова
     def separateWords(self, text):
@@ -140,15 +150,12 @@ class Crawler:
                         to_url = cursor.fetchall()[0]
                         cursor.execute("""insert  into linkBetweenURL(fk_FromURL_Id, fk_ToURL_Id) values(%s, %s);""",
                                        [from_url, to_url])
-                    # вызвать функцию класса Crawler для добавления содержимого в индекс
-                    # self.addToIndex(soup, url)
-
-                    # конец обработки текущ url
-                    pass
-
-        # конец обработки всех URL на данной глубине
-        pass
-
+                 # вызвать функцию класса Crawler для добавления содержимого в индекс
+                self.addIndex(soup, from_url)
+                # конец обработки текущ url
+                pass
+            # конец обработки всех URL на данной глубине
+            pass
         pass
 
     # 7. Инициализация таблиц в БД
@@ -185,10 +192,11 @@ class Crawler:
     # добавления записи, если такой еще нет
     def getEntryId(self, value):
         cursor = self.conn.cursor()
+        # если в таблице wordList нет слова, то добавляем
         cursor.execute("""select rowId from wordList where word = %s""", [value])
         resultSelect = cursor.fetchone()
         if resultSelect is None:
-            cursor.execute("""insert into wordList(word, value) values(%s)""", [value])
-            return cursor.lastrowid
+            cursor.execute("""insert into wordList(word, isFiltred) values(%s, '0') returning *""", [value])
+            return cursor.fetchall()[0][0]
         else:
             return resultSelect[0]
