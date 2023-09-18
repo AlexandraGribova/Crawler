@@ -2,6 +2,9 @@ import psycopg2
 import bs4
 import re
 import requests
+import pymorphy2
+
+
 class Crawler:
 
     # 0. Конструктор Инициализация паука с параметрами БД
@@ -16,8 +19,9 @@ class Crawler:
         self.conn.autocommit = True
         cursor = self.conn.cursor()
         print('Произведено подключение к серверу')
-        sql = 'select \'create database %s\' where NOT EXISTS (SELECT FROM pg_database WHERE datname = \'%s\')' % (db_name, db_name)
-        cursor.execute(sql) ## Если БД уже существует, то ничего не вернет, иначе вернет 'ctreate db name'
+        sql = 'select \'create database %s\' where NOT EXISTS (SELECT FROM pg_database WHERE datname = \'%s\')' % (
+            db_name, db_name)
+        cursor.execute(sql)  ## Если БД уже существует, то ничего не вернет, иначе вернет 'ctreate db name'
         res = cursor.fetchall()
         if len(res) != 0:
             cursor.execute(res)
@@ -41,15 +45,46 @@ class Crawler:
 
     # 1. Индексирование одной страницы
     def addIndex(self, soup, url):
-        pass
+        if self.isIndexed(url):
+            # Если страница уже есть в базе обработка происходить не будет
+            print('Уже обработана')
+            return
+        else:
+            # Если страницы нет в базе подготавливаем и добавляем
+
+            # Получаем текст
+            text = self.getTextOnly(soup)
+            # Чистим текст
+            wordList = self.separateWords(text)
+
+            # Добавляем слово, если не существует
+            for word in wordList:
+                self.getEntryId(word)
 
     # 2. Получение текста страницы
     def getTextOnly(self, text):
-        return ""
+        return
 
     # 3. Разбиение текста на слова
     def separateWords(self, text):
-        return ""
+        # Добавляем словарь знаков препинания
+        punctuationMarkDict = ['.', ',', '!', '?', ':', ';', '...', '"', '-', '(', ')']
+        # Добавляем выходной словарь
+        outDict = []
+        # Объявляем функцию, которая будет очищать текст от союзов
+        morph = pymorphy2.MorphAnalyzer(lang='ru')
+        # Массив для очистки текста от знаков препинания
+        for punctuationMark in punctuationMarkDict:
+            # Убираем каждый знак препинания из текста
+            text = text.replace(punctuationMark, '')
+        # Массив для очистки текста от союзов
+        for s in text.split():
+            # Определяем часть речи
+            tag = morph.parse(s)[0].tag.POS
+            if tag != 'CONJ':
+                # Если не союз добавляем слово в выходной список
+                outDict.append(s)
+        return outDict
 
     # 4. Проиндексирован ли URL (проверка наличия URL в БД)
     def isIndexed(self, url):
@@ -66,8 +101,9 @@ class Crawler:
         result = cursor.fetchall()
         #   добавить в таблицу URLList если такой записи нет
         if len(result) == 0:
-           cursor.execute("""insert  into URLList(url) values(%s);""", [url])
+            cursor.execute("""insert  into URLList(url) values(%s);""", [url])
         pass
+
     # 6. Непосредственно сам метод сбора данных.
     # Начиная с заданного списка страниц, выполняет поиск в ширину
     # до заданной глубины, индексируя все встречающиеся по пути страницы
@@ -82,14 +118,14 @@ class Crawler:
             for url in urlList:
                 # получить HTML-код страницы по текущему url
                 html_doc = requests.get(url).text
-                # использовать парсер для работа тегов
+                # использовать парсер для работы тегов
                 soup = bs4.BeautifulSoup(html_doc, "html.parser")
                 # получить список тэгов <a> с текущей страницы
                 for a_tag in soup.findAll('a'):
                     #   проверить наличие атрибута 'href'
                     href_tag = a_tag.get('href')
                     #   убрать пустые ссылки, вырезать якоря из ссылок, и т.д.
-                    if href_tag is not None and not '#' in href_tag and href_tag!='/':#!! вот тут непонятные локальые ссылки не удаляю пока что
+                    if href_tag is not None and not '#' in href_tag and href_tag != '/':  # !! вот тут непонятные локальые ссылки не удаляю пока что
                         if not 'http' in href_tag:
                             href_tag = url[:-1] + href_tag
                         #   добавить ссылку в список следующих на обход
@@ -102,11 +138,12 @@ class Crawler:
                         from_url = cursor.fetchall()[0]
                         cursor.execute("""select rowId from URLList where url=%s""", [href_tag])
                         to_url = cursor.fetchall()[0]
-                        cursor.execute("""insert  into linkBetweenURL(fk_FromURL_Id, fk_ToURL_Id) values(%s, %s);""", [from_url, to_url])
-            # вызвать функцию класса Crawler для добавления содержимого в индекс
-            #self.addToIndex(soup, url)
+                        cursor.execute("""insert  into linkBetweenURL(fk_FromURL_Id, fk_ToURL_Id) values(%s, %s);""",
+                                       [from_url, to_url])
+                    # вызвать функцию класса Crawler для добавления содержимого в индекс
+                    # self.addToIndex(soup, url)
 
-            # конец обработки текущ url
+                    # конец обработки текущ url
                     pass
 
         # конец обработки всех URL на данной глубине
@@ -143,7 +180,15 @@ class Crawler:
         cursor.execute(sql)
         print('Создана таблица linkWord')
         cursor.close()
+
     # 8. Вспомогательная функция для получения идентификатора и
     # добавления записи, если такой еще нет
-    def getEntryId(self, tableName, fieldName, value):
-        return 1
+    def getEntryId(self, value):
+        cursor = self.conn.cursor()
+        cursor.execute("""select rowId from wordList where word = %s""", [value])
+        resultSelect = cursor.fetchone()
+        if resultSelect is None:
+            cursor.execute("""insert into wordList(word, value) values(%s)""", [value])
+            return cursor.lastrowid
+        else:
+            return resultSelect[0]
