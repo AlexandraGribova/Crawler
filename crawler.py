@@ -5,6 +5,7 @@ import pymorphy2
 
 
 class Crawler:
+    dict = {'https://ngs.ru/':1}
 
     # 0. Конструктор Инициализация паука с параметрами БД
     def __init__(self, dbFileName):
@@ -108,14 +109,16 @@ class Crawler:
         from_url = cursor.fetchall()[0]
         cursor.execute("""select rowId from URLList where url=%s""", [urlTo])
         to_url = cursor.fetchall()[0]
-        cursor.execute("""insert  into linkBetweenURL(fk_FromURL_Id, fk_ToURL_Id) values(%s, %s) returning *;""", [from_url, to_url])
+        cursor.execute("""insert  into linkBetweenURL(fk_FromURL_Id, fk_ToURL_Id) values(%s, %s) returning *;""",
+                       [from_url, to_url])
         link_word_id = cursor.fetchall()[0][0]
         # парсим linkText
         for s in linkText.split():
             # помещаем его в wordList
             rowId = self.getEntryId(s)
             # заполянем linkWord
-            cursor.execute("""insert into linkWord(fk_wordId, fk_linkid) values(%s, %s) returning *""", [rowId, link_word_id])
+            cursor.execute("""insert into linkWord(fk_wordId, fk_linkid) values(%s, %s) returning *""",
+                           [rowId, link_word_id])
         return from_url
 
     # Добавление ссылки в URLList с проверкой на наличие дублей
@@ -125,7 +128,10 @@ class Crawler:
         result = cursor.fetchall()
         #   добавить в таблицу URLList если такой записи нет
         if len(result) == 0:
+            self.dict[url] = 1
             cursor.execute("""insert  into URLList(url) values(%s);""", [url])
+        else:
+            self.dict[url] += 1
         pass
 
     # 6. Непосредственно сам метод сбора данных.
@@ -164,6 +170,7 @@ class Crawler:
                 pass
             # конец обработки всех URL на данной глубине
             pass
+        print(self.dict)
         pass
 
     # 7. Инициализация таблиц в БД
