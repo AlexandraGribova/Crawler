@@ -1,11 +1,13 @@
-import psycopg2
 import bs4
-import requests
+import psycopg2
 import pymorphy2
+import requests
 
 
 class Crawler:
-    dictionaryURL = {'https://ngs.ru/':1}
+    # Словарь со ссылками и количеством повторений
+    dictionaryURL = {'https://ngs.ru/': 1}
+    # Словарь со словами и количеством повторений
     dictionaryWords = {}
 
     # 0. Конструктор Инициализация паука с параметрами БД
@@ -129,9 +131,11 @@ class Crawler:
         result = cursor.fetchall()
         #   добавить в таблицу URLList если такой записи нет
         if len(result) == 0:
+            # Если ссылки нет в словаре добавляем и делаем значение 1
             self.dictionaryURL[url] = 1
             cursor.execute("""insert  into URLList(url) values(%s);""", [url])
         else:
+            # Если ссылка есть в словаре прибавляем к значению 1
             self.dictionaryURL[url] += 1
         pass
 
@@ -168,6 +172,9 @@ class Crawler:
                         from_url = self.addLinkRef(url, href_tag, link_text)
                         cursor.execute('select count(*) from urllist')
                         resultNow = cursor.fetchone()[0]
+                        if resultNow % 10 == 0:
+                            print('/-----------------------------------/')
+                            self.printValues()
                         if resultNow == 150:
                             flag = True
                             break
@@ -178,26 +185,61 @@ class Crawler:
                     break
                 pass
             # конец обработки всех URL на данной глубине
-            if flag:
-                break
             pass
+        print('/-----------------------------------/')
+        print('Первые 20 наиболее часто проиндексированных ссылок:')
         self.dictSort(self.dictionaryURL)
-        print()
+        print('/-----------------------------------/')
+        print('20 наиболее часто встречающихся слов на страницах:')
         self.dictSort(self.dictionaryWords)
+        print('/-----------------------------------/')
+        print('Количество строк в таблицах:')
+        self.printValues()
         pass
 
+    # Функция для сортировки словаря и вывода значений
     def dictSort(self, dictionary):
+        # Сортируем словарь
         dictionary = dict(sorted(dictionary.items(), key=lambda item: item[1], reverse=True))
+        # Добавляем счётчик
         counter = 0
+        # Цикл для прохода по словарю и выводу значений
         for i in dictionary.keys():
             if dictionary.get(i) == 1:
                 print(i, dictionary.get(i), sep=' - ', end=' time\n')
             else:
                 print(i, dictionary.get(i), sep=' - ', end=' times\n')
             counter += 1
+            # Если счётчик равен 20 завершаем цикл
             if counter == 20:
                 break
 
+    # Функция получения количества строк
+    def printValues(self):
+        cursor = self.conn.cursor()
+        # Получение количества строк из таблицы wordlist
+        cursor.execute('select max(rowid) from wordlist')
+        result = cursor.fetchone()[0]
+        print('Количество строк в таблице wordlist равно - ', result)
+        # Получение количества строк из таблицы urllist
+        cursor.execute('select max(rowid) from urllist')
+        result = cursor.fetchone()[0]
+        print('Количество строк в таблице urllist равно - ', result)
+        # Получение количества строк из таблицы wordlocation
+        cursor.execute('select max(rowid) from wordlocation')
+        result = cursor.fetchone()[0]
+        if result is None:
+            print('Количество строк в таблице wordlocation равно - 0')
+        else:
+            print('Количество строк в таблице wordlocation равно - ', result)
+        # Получение количества строк из таблицы linkbetweenurl
+        cursor.execute('select max(rowid) from linkbetweenurl')
+        result = cursor.fetchone()[0]
+        print('Количество строк в таблице linkbetweenurl равно - ', result)
+        # Получение количества строк из таблицы linkword
+        cursor.execute('select max(rowid) from linkword')
+        result = cursor.fetchone()[0]
+        print('Количество строк в таблице linkword равно - ', result)
 
     # 7. Инициализация таблиц в БД
     def initDB(self):
@@ -238,8 +280,10 @@ class Crawler:
         resultSelect = cursor.fetchone()
         if resultSelect is None:
             cursor.execute("""insert into wordList(word, isFiltred) values(%s, '0') returning *""", [value])
+            # Если слова нет в словаре добавляем его в словарь и делаем значение 1
             self.dictionaryWords[value] = 1
             return cursor.fetchall()[0][0]
         else:
+            # Если слово есть в словаре прибавляем к его значению 1
             self.dictionaryWords[value] += 1
             return resultSelect[0]
