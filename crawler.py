@@ -108,11 +108,14 @@ class Crawler:
         from_url = cursor.fetchall()[0]
         cursor.execute("""select rowId from URLList where url=%s""", [urlTo])
         to_url = cursor.fetchall()[0]
-        cursor.execute("""insert  into linkBetweenURL(fk_FromURL_Id, fk_ToURL_Id) values(%s, %s) returning *;""",
-                       [from_url, to_url])
+        cursor.execute("""insert  into linkBetweenURL(fk_FromURL_Id, fk_ToURL_Id) values(%s, %s) returning *;""", [from_url, to_url])
         link_word_id = cursor.fetchall()[0][0]
-        # 1) парсим linkText и помещаем его в wordList
-        # 2) заполянем linkWord -> wordList.rowId, link_word_id
+        # парсим linkText
+        for s in linkText.split():
+            # помещаем его в wordList
+            rowId = self.getEntryId(s)
+            # заполянем linkWord
+            cursor.execute("""insert into linkWord(fk_wordId, fk_linkid) values(%s, %s) returning *""", [rowId, link_word_id])
         return from_url
 
     # Добавление ссылки в URLList с проверкой на наличие дублей
