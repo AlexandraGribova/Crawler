@@ -5,7 +5,8 @@ import pymorphy2
 
 
 class Crawler:
-    dict = {'https://ngs.ru/':1}
+    dictionaryURL = {'https://ngs.ru/':1}
+    dictionaryWords = {}
 
     # 0. Конструктор Инициализация паука с параметрами БД
     def __init__(self, dbFileName):
@@ -128,10 +129,10 @@ class Crawler:
         result = cursor.fetchall()
         #   добавить в таблицу URLList если такой записи нет
         if len(result) == 0:
-            self.dict[url] = 1
+            self.dictionaryURL[url] = 1
             cursor.execute("""insert  into URLList(url) values(%s);""", [url])
         else:
-            self.dict[url] += 1
+            self.dictionaryURL[url] += 1
         pass
 
     # 6. Непосредственно сам метод сбора данных.
@@ -145,6 +146,7 @@ class Crawler:
         for currDepth in range(0, maxDepth):
             urlList = urlListNew.copy()
             urlListNew = []
+            flag = False
             for url in urlList:
                 # получить HTML-код страницы по текущему url
                 html_doc = requests.get(url).text
@@ -164,14 +166,38 @@ class Crawler:
                         link_text = a_tag.text.lower()
                         self.addUrlToURLList(href_tag)
                         from_url = self.addLinkRef(url, href_tag, link_text)
+                        cursor.execute('select count(*) from urllist')
+                        resultNow = cursor.fetchone()[0]
+                        if resultNow == 150:
+                            flag = True
+                            break
                 # вызвать функцию класса Crawler для добавления содержимого в индекс
                 self.addIndex(soup, from_url)
                 # конец обработки текущ url
+                if flag:
+                    break
                 pass
             # конец обработки всех URL на данной глубине
+            if flag:
+                break
             pass
-        print(self.dict)
+        self.dictSort(self.dictionaryURL)
+        print()
+        self.dictSort(self.dictionaryWords)
         pass
+
+    def dictSort(self, dictionary):
+        dictionary = dict(sorted(dictionary.items(), key=lambda item: item[1], reverse=True))
+        counter = 0
+        for i in dictionary.keys():
+            if dictionary.get(i) == 1:
+                print(i, dictionary.get(i), sep=' - ', end=' time\n')
+            else:
+                print(i, dictionary.get(i), sep=' - ', end=' times\n')
+            counter += 1
+            if counter == 20:
+                break
+
 
     # 7. Инициализация таблиц в БД
     def initDB(self):
@@ -212,6 +238,8 @@ class Crawler:
         resultSelect = cursor.fetchone()
         if resultSelect is None:
             cursor.execute("""insert into wordList(word, isFiltred) values(%s, '0') returning *""", [value])
+            self.dictionaryWords[value] = 1
             return cursor.fetchall()[0][0]
         else:
+            self.dictionaryWords[value] += 1
             return resultSelect[0]
